@@ -1,0 +1,37 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "itential-builder",
+  "version": "2.0.0",
+  "description": "AI agent skills for the Itential Platform — deliver infrastructure automation from spec through acceptance testing and as-built documentation. Covers requirements, feasibility, design, build, QA/acceptance testing, FlowAgent, IAG, and MOP.",
+  "author": {
+    "name": "Itential"
+  },
+  "homepage": "https://github.com/itential/builder-skills",
+  "repository": "https://github.com/itential/builder-skills",
+  "license": "GPL-3.0-or-later",
+  "keywords": [
+    "itential",
+    "network-automation",
+    "infrastructure",
+    "flowagent",
+    "iag"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Itential Builder",
+        "shortDescription": "Spec-driven network automation on the Itential Platform",
+        "longDescription": "Deliver infrastructure automation on the Itential Platform end to end: refine requirements into an approved spec, assess feasibility against your live platform, design, build and test workflows, and record what was delivered. Also covers IAG services, FlowAgent, golden config and compliance, command templates, devices, inventories, lifecycle manager and JSON forms.",
+        "developerName": "Itential",
+        "category": "Automation",
+        "websiteURL": "https://www.itential.com",
+        "defaultPrompt": [
+          "I want to automate VLAN provisioning on my Itential platform",
+          "Connect to my Itential platform and show me what's there",
+          "Assess whether I'm ready to move from Gateway 4 to Gateway 5",
+          "Build a golden config and run compliance for my devices"
+        ]
+      }
+    }
+  }
+}

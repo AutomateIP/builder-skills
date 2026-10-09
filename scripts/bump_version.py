@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-"""Bump the plugin version across .claude-plugin/plugin.json and marketplace.json.
+"""Bump the plugin version across every manifest that carries one.
 
-Used by .github/workflows/version-bump.yml after a PR merges to main. Not meant to be
-run against a dirty working tree — reads the current version from plugin.json, computes
-the next semver value for the given bump type, and writes it back to both manifest files
-so they can never drift out of sync with each other.
+Manifests: .claude-plugin/plugin.json and marketplace.json (Claude Code), the root
+plugin.json (Agent Plugins format -- read by Codex, Copilot, VS Code), and
+.cursor-plugin/plugin.json and marketplace.json (Cursor). Codex keys
+its install cache by this version, so letting the root manifest drift means Codex users
+never see a new version.
+
+Run by a maintainer when cutting a release (in a PR: --bump patch|minor|major). Not meant
+to be run against a dirty working tree -- reads the current version from
+.claude-plugin/plugin.json, refuses to bump if the manifests already disagree, computes
+the next semver value, and writes it to all of them.
+
+  --check   only verify the manifests agree (used in CI); exits 1 if they don't
 """
 
 import argparse
@@ -15,6 +23,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
+ROOT_PLUGIN_JSON = REPO_ROOT / "plugin.json"
+CURSOR_PLUGIN_JSON = REPO_ROOT / ".cursor-plugin" / "plugin.json"
+CURSOR_MARKETPLACE_JSON = REPO_ROOT / ".cursor-plugin" / "marketplace.json"
 
 
 def bump(version: str, kind: str) -> str:
@@ -28,10 +39,38 @@ def bump(version: str, kind: str) -> str:
     raise ValueError(f"Unknown bump kind: {kind}")
 
 
+def versions() -> dict:
+    plugin = json.loads(PLUGIN_JSON.read_text())
+    marketplace = json.loads(MARKETPLACE_JSON.read_text())
+    found = {
+        ".claude-plugin/plugin.json": plugin["version"],
+        ".claude-plugin/marketplace.json metadata": marketplace["metadata"]["version"],
+        "plugin.json": json.loads(ROOT_PLUGIN_JSON.read_text())["version"],
+    }
+    for entry in marketplace.get("plugins", []):
+        found[f".claude-plugin/marketplace.json plugins[{entry['name']}]"] = entry["version"]
+    found[".cursor-plugin/plugin.json"] = json.loads(CURSOR_PLUGIN_JSON.read_text())["version"]
+    for entry in json.loads(CURSOR_MARKETPLACE_JSON.read_text()).get("plugins", []):
+        found[f".cursor-plugin/marketplace.json plugins[{entry['name']}]"] = entry["version"]
+    return found
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bump", required=True, choices=["major", "minor", "patch"])
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--bump", choices=["major", "minor", "patch"])
+    group.add_argument("--check", action="store_true")
     args = parser.parse_args()
+
+    found = versions()
+    if len(set(found.values())) != 1:
+        print("Manifest versions disagree:", file=sys.stderr)
+        for where, v in found.items():
+            print(f"  {v:10} {where}", file=sys.stderr)
+        sys.exit(1)
+    if args.check:
+        print(f"All manifests at {next(iter(found.values()))}")
+        return
 
     plugin = json.loads(PLUGIN_JSON.read_text())
     current_version = plugin["version"]
@@ -45,6 +84,18 @@ def main() -> None:
     for entry in marketplace.get("plugins", []):
         entry["version"] = new_version
     MARKETPLACE_JSON.write_text(json.dumps(marketplace, indent=2) + "\n")
+
+    root_plugin = json.loads(ROOT_PLUGIN_JSON.read_text())
+    root_plugin["version"] = new_version
+    ROOT_PLUGIN_JSON.write_text(json.dumps(root_plugin, indent=2, ensure_ascii=False) + "\n")
+
+    cursor_plugin = json.loads(CURSOR_PLUGIN_JSON.read_text())
+    cursor_plugin["version"] = new_version
+    CURSOR_PLUGIN_JSON.write_text(json.dumps(cursor_plugin, indent=2, ensure_ascii=False) + "\n")
+    cursor_market = json.loads(CURSOR_MARKETPLACE_JSON.read_text())
+    for entry in cursor_market.get("plugins", []):
+        entry["version"] = new_version
+    CURSOR_MARKETPLACE_JSON.write_text(json.dumps(cursor_market, indent=2, ensure_ascii=False) + "\n")
 
     print(f"{current_version} -> {new_version}", file=sys.stderr)
     print(new_version)
